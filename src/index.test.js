@@ -1,0 +1,1 @@
+const { kube } = require('./index')

@@ -1,0 +1,23 @@
+{
+    "name": "@lamaani/node_rest_api",
+    "version": "0.0.1",
+    "description": "A fast and stream-able rest api with specific api support",
+    "main": "src/index.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/LamaAni/node_rest_api.git"
+    },
+    "keywords": [
+        "node",
+        "REST",
+        "api",
+        "rest",
+        "kubernetes"
+    ],
+    "author": "Zav Shotan",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/LamaAni/node_rest_api/issues"
+    },
+    "homepage": "https://github.com/LamaAni/node_rest_api#readme"
+}
