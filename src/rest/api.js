@@ -2,7 +2,7 @@ const AsyncQueue = require('../events/queue')
 const { Lock } = require('../events/lock')
 const { RestApiEventEmitter } = require('./events')
 const axios = require('axios')
-const assert = require('assert')
+const { assert } = require('../errors')
 
 const REST_API_REQUEST_METHODS = {
     GET: 'GET',
@@ -11,7 +11,7 @@ const REST_API_REQUEST_METHODS = {
     DELETE: 'DELETE',
 }
 
-const RestApiRequest_EVENT_NAMES = {
+const REST_API_REQUEST_EVENT_NAMES = {
     complete_event_name: 'request_complete',
     data_event_name: 'request_data',
     start_event_name: 'request_start',
@@ -22,8 +22,6 @@ const sleep = async (ms) =>
     await new Promise((r) => {
         setTimeout(() => r(), ms)
     })
-
-global._rest_api_request_id
 
 class RestApiRequest extends RestApiEventEmitter {
     /**
@@ -47,7 +45,7 @@ class RestApiRequest extends RestApiEventEmitter {
             timeout = null,
             body = null,
             ignore_errors = null,
-            max_cuncurrent_request_failures = null,
+            max_concurrent_request_failures: max_concurrent_request_failures = null,
         } = {},
     ) {
         super()
@@ -60,12 +58,12 @@ class RestApiRequest extends RestApiEventEmitter {
         this.timeout = timeout
         this.body = body
         this.ignore_errors = ignore_errors
-        this.max_cuncurrent_request_failures = max_cuncurrent_request_failures
+        this.max_concurrent_request_failures = max_concurrent_request_failures
 
-        this.complete_event_name = RestApiRequest_EVENT_NAMES.complete_event_name
-        this.data_event_name = RestApiRequest_EVENT_NAMES.data_event_name
-        this.start_event_name = RestApiRequest_EVENT_NAMES.start_event_name
-        this.ignore_errors_event_name = RestApiRequest_EVENT_NAMES.ignore_errors_event_name
+        this.complete_event_name = REST_API_REQUEST_EVENT_NAMES.complete_event_name
+        this.data_event_name = REST_API_REQUEST_EVENT_NAMES.data_event_name
+        this.start_event_name = REST_API_REQUEST_EVENT_NAMES.start_event_name
+        this.ignore_errors_event_name = REST_API_REQUEST_EVENT_NAMES.ignore_errors_event_name
     }
 
     static __generate_next_id() {
@@ -266,9 +264,9 @@ class RestApiRequest extends RestApiEventEmitter {
      */
     async send_request() {
         let max_attempts =
-            typeof this.max_cuncurrent_request_failures != 'number'
+            typeof this.max_concurrent_request_failures != 'number'
                 ? 1
-                : this.max_cuncurrent_request_failures
+                : this.max_concurrent_request_failures
 
         while (max_attempts > 0) {
             max_attempts -= 1

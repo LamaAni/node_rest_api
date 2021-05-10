@@ -105,16 +105,22 @@ class KubeResourceKind {
 
     static has_kind(name) {
         assert(typeof name == 'string' && name.trim().length > 0, 'Name cannot be null')
-        return typeof name == 'string' && this.global_kinds[name] instanceof KubeResourceKind
+        name = name.toLowerCase()
+        return this.global_kinds[name] instanceof KubeResourceKind
     }
 
+    /**
+     * @param {string} name
+     */
     static get_kind(name) {
         assert(typeof name == 'string' && name.trim().length > 0, 'Name cannot be null')
+        name = name.toLowerCase()
         assert(
             this.has_kind(name),
             `Unknown kubernetes kind ${name},` +
                 ` you can use  KubeResourceKind.register_global_kind to register new kinds`,
         )
+        return this.global_kinds[name]
     }
 
     static all() {
@@ -141,7 +147,7 @@ class KubeResourceKind {
      */
     static create_from_existing(name, { api_version = null, parse_kind_state = null } = {}) {
         assert(typeof name == 'string' && name.trim().length > 0, 'Name cannot be null')
-        name = name.lower()
+        name = name.toLowerCase()
 
         if (!this.has_kind(name)) return new KubeResourceKind(name, api_version, parse_kind_state)
 

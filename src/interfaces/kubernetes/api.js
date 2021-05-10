@@ -10,7 +10,7 @@ class KubeApiRequest extends RestApiRequest {
             timeout = null,
             body = null,
             ignore_errors = null,
-            max_cuncurrent_request_failures = null,
+            max_concurrent_request_failures = null,
         } = {},
     ) {
         super(url, {
@@ -20,7 +20,7 @@ class KubeApiRequest extends RestApiRequest {
             timeout,
             body,
             ignore_errors,
-            max_cuncurrent_request_failures,
+            max_concurrent_request_failures,
         })
     }
 }

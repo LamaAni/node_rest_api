@@ -3,6 +3,7 @@ const { EventEmitter } = require('events')
 
 const DEFAULT_ERROR_EVENT_NAME = 'error'
 const DEFAULT_WARNING_EVENT_NAME = 'warning'
+
 class RestApiEventEmitter extends EventEmitter {
     constructor() {
         super()
