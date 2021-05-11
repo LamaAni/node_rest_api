@@ -1,6 +1,8 @@
 const { RestApiError, assert } = require('../../errors')
 
-class KubernetesApiError extends RestApiError {}
+class KubeApiError extends RestApiError {}
+
+class KubeApiServiceError extends RestApiError {}
 
 module.exports = {
     assert:
@@ -10,8 +12,9 @@ module.exports = {
          * @param {typeof Error} error_type
          * @returns
          */
-        (condition, err, error_type = KubernetesApiError) => {
+        (condition, err, error_type = KubeApiError) => {
             assert(condition, err, error_type)
         },
-    KubernetesApiError,
+    KubeApiError,
+    KubeApiServiceError,
 }

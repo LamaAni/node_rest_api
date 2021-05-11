@@ -1,284 +1,13 @@
 const AsyncQueue = require('../events/queue')
 const { Lock } = require('../events/lock')
 const { RestApiEventEmitter } = require('./events')
-const axios = require('axios')
 const { assert } = require('../errors')
-
-const REST_API_REQUEST_METHODS = {
-    GET: 'GET',
-    POST: 'POST',
-    PUT: 'PUT',
-    DELETE: 'DELETE',
-}
-
-const REST_API_REQUEST_EVENT_NAMES = {
-    complete_event_name: 'request_complete',
-    data_event_name: 'request_data',
-    start_event_name: 'request_start',
-    ignore_errors_event_name: 'request_error_ignored',
-}
+const { RestApiRequest } = require('./requests')
 
 const sleep = async (ms) =>
     await new Promise((r) => {
         setTimeout(() => r(), ms)
     })
-
-class RestApiRequest extends RestApiEventEmitter {
-    /**
-     * A basic request object that can be sent to the rest api.
-     * @param {string} url
-     * @param {object} param1 A collection of request options
-     * @param {number} param1.timeout The request timeout in ms
-     * @param {object} param1.params The request params
-     * @param {object} param1.headers The request headers
-     * @param {REST_API_REQUEST_METHODS} param1.method The request method
-     * @param {string} param1.body The request body
-     * @param {[number]|(code)=>{}} param1.ignore_errors If a list of codes, ignores the error codes in the list.
-     * If method then predicts the error responses to ignore.
-     */
-    constructor(
-        url,
-        {
-            params = null,
-            headers = null,
-            method = REST_API_REQUEST_METHODS.GET,
-            timeout = null,
-            body = null,
-            ignore_errors = null,
-            max_concurrent_request_failures: max_concurrent_request_failures = null,
-        } = {},
-    ) {
-        super()
-
-        this._id = RestApiRequest.__generate_next_id()
-        this.url = url
-        this.params = params || {}
-        this.headers = headers || {}
-        this.method = method || 'GET'
-        this.timeout = timeout
-        this.body = body
-        this.ignore_errors = ignore_errors
-        this.max_concurrent_request_failures = max_concurrent_request_failures
-
-        this.complete_event_name = REST_API_REQUEST_EVENT_NAMES.complete_event_name
-        this.data_event_name = REST_API_REQUEST_EVENT_NAMES.data_event_name
-        this.start_event_name = REST_API_REQUEST_EVENT_NAMES.start_event_name
-        this.ignore_errors_event_name = REST_API_REQUEST_EVENT_NAMES.ignore_errors_event_name
-    }
-
-    static __generate_next_id() {
-        global._rest_api_request_id =
-            (global._rest_api_request_id == null ? -1 : global._rest_api_request_id) + 1
-        return global._rest_api_request_id
-    }
-
-    static parse_response_status_code(response) {
-        response = response || {}
-        return response.statusCode || response.status
-    }
-
-    /**
-     * The unique ID of the request
-     * @returns {number|string}
-     */
-    get id() {
-        return this._id
-    }
-
-    _check_ignore_errors(err) {
-        if (this.ignore_errors == null) return false
-
-        if (Array.isArray(this.ignore_errors)) {
-            let status = err.status || (err.response || {}).status
-            return this.ignore_errors.some((c) => status == c)
-        }
-
-        if (typeof this.ignore_errors == 'function') return this.ignore_errors(err)
-
-        return false
-    }
-
-    /**
-     * Called to emit new data. Override this method to allow for custom data
-     * processing.
-     * @param {object} data The data received from the server. Any type.
-     */
-    async emit_data(data) {
-        this.emit(this.data_event_name, data, this)
-    }
-
-    /**
-     * Called when the request is complete. Override this method for custom
-     * processing.
-     */
-    async emit_complete() {
-        this.emit(this.complete_event_name, this)
-    }
-
-    /**
-     * Called when the request is starting. Override this method for custom
-     * processing.
-     */
-    async emit_start() {
-        this.emit(this.start_event_name, this)
-    }
-
-    /**
-     * Called when the request is error is ignored. Override this method for custom
-     * processing.
-     */
-    async emit_error_ignored(err) {
-        this.emit(this.ignored_error_event_name, err, this)
-    }
-
-    /**
-     * Called to parse the response data from the response object. Override to add custom
-     * response parsing.
-     * @param {object} rsp
-     */
-    parse_response_data(rsp) {
-        /** @type {string} */
-        let data = rsp.data || rsp.body
-        if (typeof data == 'string') {
-            try {
-                return JSON.parse(data)
-            } catch (err) {
-                return data
-            }
-        } else {
-            return data
-        }
-    }
-
-    /**
-     * Called to process the request a-synchronically.
-     * Override this method to allow for custom request processing.
-     */
-    async do_request_processing() {
-        try {
-            await this.emit_start()
-            let rsp = await this.send_request()
-            let data = this.parse_response_data(rsp)
-            rsp = null
-            await this.emit_data(data)
-            data = null
-        } catch (err) {
-            if (this._check_ignore_errors(err)) await this.emit_error_ignored(err)
-            else this.emit_error(err)
-        } finally {
-            await this.emit_complete()
-        }
-    }
-
-    async __do_send_request() {
-        return await new Promise((resolve, reject) => {
-            let timeout_index = null
-
-            function clear_request_timeout() {
-                if (timeout_index != null) {
-                    clearTimeout(timeout_index)
-                    timeout_index = null
-                }
-            }
-
-            /**
-             * @param {Error} err
-             */
-            function do_reject(err) {
-                try {
-                    err.message = (err.response.data || {}).message || err.message || ''
-                    err.status = RestApiRequest.parse_response_status_code(err.response)
-
-                    if (err.response != null && err.status != null)
-                        err.message += ` @ {${err.status}} ${
-                            err.config.url || err.request.url || '[unknown]'
-                        } `
-
-                    // hide the internals.
-                    err.internal_stack = err.stack
-                    try {
-                        throw new Error()
-                    } catch (inner_err) {
-                        err.stack =
-                            (err.message != null ? err.message + '\n' : '') + inner_err.stack
-                    }
-
-                    reject(err)
-                } catch (inner_err) {
-                    reject(err)
-                }
-            }
-
-            function do_resolve(rsp) {
-                resolve(rsp)
-            }
-
-            try {
-                let options = {
-                    url: this.url,
-                    method: this.method || 'GET',
-                    headers: this.headers || {},
-                    data: this.body,
-                    params: this.params || {},
-                }
-
-                Object.keys(options).forEach((k) => {
-                    if (options[k] == null) delete options[k]
-                })
-
-                axios(options)
-                    // got(this.url, options)
-                    .then((rsp) => {
-                        try {
-                            let status_code = RestApiRequest.parse_response_status_code(rsp)
-                            if (status_code != 200) {
-                                throw Error(`${rsp.statusMessage} (${status_code})`, rsp)
-                            } else {
-                                do_resolve(rsp)
-                            }
-                        } catch (err) {
-                            do_reject(err)
-                        }
-                    })
-                    .catch((err) => {
-                        do_reject(err)
-                    })
-                    .finally(() => {
-                        clear_request_timeout()
-                    })
-
-                if (this.timeout != null)
-                    timeout_index = setTimeout(() => {
-                        do_reject(new Error(`Request timeout (${this.timeout} [ms])`))
-                    }, this.timeout)
-            } catch (err) {
-                clear_request_timeout()
-                do_reject(err)
-            }
-        })
-    }
-
-    /**
-     * Sends a request to the server. Override this method
-     * to provide custom request sending.
-     */
-    async send_request() {
-        let max_attempts =
-            typeof this.max_concurrent_request_failures != 'number'
-                ? 1
-                : this.max_concurrent_request_failures
-
-        while (max_attempts > 0) {
-            max_attempts -= 1
-            try {
-                return await this.__do_send_request()
-            } catch (err) {
-                if (max_attempts == 0) throw err
-                else this.emit_error_ignored(err)
-            }
-        }
-    }
-}
 
 class RestApi extends RestApiEventEmitter {
     /**
@@ -325,7 +54,7 @@ class RestApi extends RestApiEventEmitter {
                 const rq_info = {
                     request: rq,
                     promise: rq
-                        .do_request_processing()
+                        .send()
                         .catch(() => {}) // errors are handled by the request.
                         .finally(() => {
                             delete this._active_requests[rq.id]
@@ -394,6 +123,7 @@ class RestApi extends RestApiEventEmitter {
         for (let rq of requests) {
             rq.pipe(this)
             rq.pipe(handler)
+            rq.rest_api = this
             rq.params = { ...(this.params || {}), ...rq.params }
             rq.headers = { ...(this.headers || {}), ...rq.headers }
             this._pending_requests.push(rq)
@@ -494,7 +224,6 @@ class RestApi extends RestApiEventEmitter {
 module.exports = {
     RestApi,
     RestApiRequest,
-    REST_API_REQUEST_METHODS,
 }
 
 if (require.main == module) {

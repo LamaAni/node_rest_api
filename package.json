@@ -19,5 +19,10 @@
     "bugs": {
         "url": "https://github.com/LamaAni/node_rest_api/issues"
     },
-    "homepage": "https://github.com/LamaAni/node_rest_api#readme"
+    "homepage": "https://github.com/LamaAni/node_rest_api#readme",
+    "dependencies": {
+        "@kubernetes/client-node": "^0.14.3",
+        "moment": "^2.29.1",
+        "yaml": "^1.10.2"
+    }
 }

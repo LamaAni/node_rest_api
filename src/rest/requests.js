@@ -11,19 +11,18 @@ const REST_API_REQUEST_EVENT_NAMES = {
     ignore_errors_event_name: 'request_error_ignored',
 }
 
-const sleep = async (ms) =>
-    await new Promise((r) => {
-        setTimeout(() => r(), ms)
-    })
-
 /**
+ * @typedef {"GET" | "POST" | "PUT" | "DELETE"} REST_API_METHODS
+ * @typedef {import('./api').RestApi} RestApi
+ *
  * @typedef {Object} RestApiRequestOptions
  * @property {Object<string, Object|string} params The request params
  * @property {Object<string,string>} headers The request headers
- * @property {http.METHODS} method The request method
+ * @property {REST_API_METHODS} method The request method
  * @property {string|Object|()=>string|Object} body The request body, if Object, converts to
  * JSON, if method get the function result and the convert if needed.
  * @property {[number]|(code)=>{}} ignore_errors If a list of codes or a method to filter. These errors are ignored.
+ * @property {RestApi} rest_api The associated rest api
  */
 
 class RestApiRequest extends RestApiEventEmitter {
@@ -37,11 +36,12 @@ class RestApiRequest extends RestApiEventEmitter {
         {
             params = null,
             headers = null,
-            method = http.METHODS.GET,
+            method = 'GET',
             timeout = null,
             body = null,
             ignore_errors = null,
             max_concurrent_request_failures: max_concurrent_request_failures = null,
+            rest_api = null,
         } = {},
     ) {
         super()
@@ -60,6 +60,7 @@ class RestApiRequest extends RestApiEventEmitter {
         this.body = body
         this.ignore_errors = ignore_errors
         this.max_concurrent_request_failures = max_concurrent_request_failures
+        this.rest_api = rest_api
     }
 
     static __generate_next_id() {
@@ -84,7 +85,8 @@ class RestApiRequest extends RestApiEventEmitter {
     _params_to_url_search_params() {
         const url_search_params = {}
         for (let k of Object.keys(this.params)) {
-            const v = this.params[v]
+            let v = this.params[k]
+            if (v == null) continue
             const type_v = typeof v
             switch (type_v) {
                 case 'bigint':
@@ -127,14 +129,43 @@ class RestApiRequest extends RestApiEventEmitter {
     }
 
     /**
-     * Composes the request url and updates the search params.
-     * @returns {URL}
+     * Composes the requests options. Override to update the request options
+     * before sending to server.
+     * @returns {http.RequestOptions}
      */
-    compose_request_url() {
-        const url = new URL(this.url)
+    async compose_request_options(uri = null) {
+        /** @type {URL} */
+        const url = new URL(uri || this.url)
         const url_search_params = this._params_to_url_search_params()
         for (let k of Object.keys(url_search_params)) url.searchParams[k] = url_search_params[k]
-        return url
+
+        assert(
+            ['http:', 'https:'].some((p) => url.protocol == p),
+            `Protocol ${url.protocol} not available. Available: http, https`,
+        )
+
+        for (let k of Object.keys(url_search_params)) {
+            if (url_search_params[k] == null) continue
+            url.searchParams[k] = url_search_params[k]
+        }
+
+        url.search = Object.keys(url.searchParams)
+            .filter((k) => url.searchParams[k] != null)
+            .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(url.searchParams[k])}`)
+            .join('&')
+
+        /** @type {http.RequestOptions} */
+        const options = {
+            method: this.method || 'GET',
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+            headers: this.headers || {},
+            timeout: this.timeout || 1000 * 60 * 24, // defaults to 24 [H]
+        }
+
+        return options
     }
 
     /**
@@ -207,25 +238,9 @@ class RestApiRequest extends RestApiEventEmitter {
             }
 
             try {
-                const url = this.compose_request_url()
+                const options = await this.compose_request_options()
 
-                assert(
-                    ['http:', 'https:'].some((p) => url.protocol == p),
-                    `Protocol ${url.protocol} not available. Available: http, https`,
-                )
-
-                /** @type {http.RequestOptions} */
-                const options = {
-                    method: this.method || 'GET',
-                    protocol: url.protocol,
-                    hostname: url.hostname,
-                    port: url.port,
-                    path: url.pathname + url.search,
-                    headers: this.headers || {},
-                    timeout: this.timeout || 1000 * 60 * 24, // defaults to 24 [H]
-                }
-
-                request = (url.protocol == 'https:' ? https : http).request(
+                request = (options.protocol == 'https:' ? https : http).request(
                     options,
                     bind_request_events,
                 )
@@ -296,9 +311,9 @@ class RestApiRequest extends RestApiEventEmitter {
     /**
      * Called to process the request a-synchronically.
      * Override this method to allow for custom request processing.
-     * @param {boolean} throw_erros If true, throws errors.
+     * @param {boolean} throw_errors If true, throws errors.
      */
-    async send(throw_erros = true) {
+    async send() {
         try {
             await this.emit_start()
             let data = await this._send_request()
@@ -309,11 +324,15 @@ class RestApiRequest extends RestApiEventEmitter {
             if (this._check_ignore_errors(err)) await this.emit_error_ignored(err)
             else {
                 this.emit_error(err)
-                if (throw_erros) throw err
+                throw err
             }
         } finally {
             await this.emit_complete()
         }
+    }
+
+    compose_log_header(msg) {
+        return `[${this.url.toString()}] `
     }
 
     /**
@@ -323,7 +342,7 @@ class RestApiRequest extends RestApiEventEmitter {
     bind_logger(logger = null) {
         logger = logger || console
         const compose_line = (msg) => {
-            return `[${this.url.toString()}] ${msg}`
+            return `${this.compose_log_header()}${msg}`
         }
         this.on(this.complete_event_name, () => {
             logger.info(compose_line('Request complete'))
@@ -334,15 +353,15 @@ class RestApiRequest extends RestApiEventEmitter {
         })
 
         this.on(this.start_event_name, () => {
-            logger.info(compose_line('Request strated'))
+            logger.info(compose_line('Request started'))
         })
 
         this.on(this.error_event_name, (err) => {
-            logger.error(compose_line(err.message || err))
+            logger.error(compose_line(err.stack || err.message || err))
         })
 
         this.on(this.warning_event_name, (err) => {
-            logger.warn(compose_line(err.message || err))
+            logger.warn(compose_line(err.stack || err.message || err))
         })
     }
 }
