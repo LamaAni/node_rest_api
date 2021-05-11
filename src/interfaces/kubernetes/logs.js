@@ -21,7 +21,7 @@ function default_parse_kubernetes_log_level(msg) {
 }
 
 const LOG_LINE_START_MATCH = /^[0-9]{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}([.][0-9]+)?([-+]\d{2}:\d{2}|[Zz])/gm
-
+const LOG_EVENT_REGEXP = /^\s*[:]{2}kube_api[:]([a-zA-Z0-9._-]+)[=](.*)$/s
 /**
  * @typedef {Object} KubeLogLineOptions
  * @property {boolean} show_timestamps Show server timestamps
@@ -80,6 +80,36 @@ class KubeApiLogLine {
     }
 }
 
+class KubeApiLogEvent {
+    /**
+     * @param {string} name The event name.
+     * @param {string} value The event value.
+     * @param {KubeApiLogLine|string} line The triggering log line.
+     * @param {GetPodLogs} sender
+     */
+    constructor(name, value, line, sender = null) {
+        this.name = name
+        this.value = value
+        this.line = line
+        this.sender = sender
+    }
+
+    /**
+     * Parse a log event from a log line. If cannot parse returns null.
+     * @param {KubeApiLogLine|string} line
+     * @returns {KubeApiLogEvent}
+     */
+    static parse(line) {
+        const message = line instanceof KubeApiLogLine ? line.message : line
+        assert(typeof message == 'string', 'Cannot parse a non string message')
+        const match = new RegExp(LOG_EVENT_REGEXP).exec(message)
+        if (match == null) return null
+        const name = match[1]
+        const value = match[2]
+        return new KubeApiLogEvent(name, value, line)
+    }
+}
+
 /**
  * @typedef {import('http').ClientRequest} ClientRequest
  * @typedef {import('http').IncomingMessage} IncomingMessage
@@ -92,6 +122,9 @@ class KubeApiLogLine {
  * will returns the logs to that container. Otherwise error.
  * @property {boolean} collect_log_lines If true, collect the log lines and returns the lines
  * as a result of the request. Otherwise just emits the log event.
+ * @property {(line: KubeApiLogLine|string)=>KubeApiLogEvent} parse_log_events A parser to extract log events from
+ * the log. Defaults to KubeApiLogEvent.parse. Event names are emitted as, 'log_event.[name]' and as 'log_event' in the event
+ * emitter.
  */
 
 class GetPodLogs extends KubeApiRequest {
@@ -110,6 +143,8 @@ class GetPodLogs extends KubeApiRequest {
             container = null,
             collect_log_lines = true,
             show_timestamps = false,
+            parse_log_events = KubeApiLogEvent.parse,
+            emit_log_lines_on_events = false,
         },
     ) {
         assert(typeof name == 'string' && name.trim().length > 0, 'name must be a non empty string')
@@ -146,11 +181,14 @@ class GetPodLogs extends KubeApiRequest {
         this.since = since
         this.container = container
         this.collect_log_lines = collect_log_lines
+        this.parse_log_events = parse_log_events
         this.show_timestamps = show_timestamps
+        this.emit_log_lines_on_events = false
 
         this.on(this.start_event_name, () => this.prepare_log_read())
 
         this.log_event_name = 'log'
+        this.log_event_event_name = 'log_event'
     }
 
     prepare_log_read() {
@@ -249,7 +287,16 @@ class GetPodLogs extends KubeApiRequest {
      * @param {[KubeApiLogLine]} lines
      */
     emit_log_lines(lines) {
-        for (let line of lines) this.emit(this.log_event_name, line)
+        for (let line of lines) {
+            const log_event = this.parse_log_events == null ? null : this.parse_log_events(line)
+            if (log_event != null) {
+                log_event.sender = this
+                this.emit(this.log_event_event_name, log_event)
+                this.emit(`${this.log_event_event_name}.${log_event.name}`, log_event)
+            }
+            if (log_event != null && !this.emit_log_lines_on_events) continue
+            this.emit(this.log_event_name, line)
+        }
     }
 
     /**
@@ -274,6 +321,7 @@ class GetPodLogs extends KubeApiRequest {
             if (emit) this.emit_log_lines(lines)
             if (this.collect_log_lines) data.lines = data.lines.concat(lines)
         }
+        
         return data
     }
 
@@ -293,6 +341,25 @@ class GetPodLogs extends KubeApiRequest {
         this.on(this.log_event_name, (line) => {
             logger.info(line.toString())
         })
+
+        this.on(
+            this.log_event_event_name,
+            /**
+             *
+             * @param {KubeApiLogEvent} log_event
+             */
+            (log_event) => {
+                logger.info(
+                    `${
+                        log_event.line instanceof KubeApiLogLine
+                            ? log_event.line.context_header()
+                            : `[${this.namespace}/${this.name}]`
+                    } {Log event} ${log_event.name} triggered with ${Math.ceil(
+                        log_event.value.length / 10,
+                    )} [Kb]`,
+                )
+            },
+        )
     }
 }
 

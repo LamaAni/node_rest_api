@@ -23,7 +23,16 @@ class KubeApiConfig {
     }
 }
 
+/**
+ * @typedef {import('../../rest/requests').RestApiRequestOptions} RestApiRequestOptions
+ * @typedef {RestApiRequestOptions} KubeApiRequestOptions
+ */
+
 class KubeApiRequest extends RestApiRequest {
+    /**
+     * @param {string} resource_path 
+     * @param {KubeApiRequestOptions} param1 
+     */
     constructor(
         resource_path,
         {

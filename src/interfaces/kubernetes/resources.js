@@ -111,6 +111,7 @@ class KubeResourceKind {
 
     /**
      * @param {string} name
+     * @returns {KubeResourceKind}
      */
     static get_kind(name) {
         assert(typeof name == 'string' && name.trim().length > 0, 'Name cannot be null')
@@ -249,9 +250,9 @@ for (let kind of [
 }
 
 module.exports = {
-    KubeResourceKind,
     /** @type {ResourceKindState} Interface */
     ResourceKindState: null,
+    KubeResourceKind: KubeResourceKind,
 }
 
 if (require.main == module) {

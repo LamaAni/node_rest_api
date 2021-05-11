@@ -1,11 +1,15 @@
 const { KubeApi } = require('./api')
-const { GetPodLogs } = require('./queries')
+const { GetPodLogs } = require('./logs')
+const { GetNamespaceResources } = require('./info')
 
-const api = new KubeApi()
-const logs_query = new GetPodLogs('iflow-airflow-zairflow-web-6d7b47d8c4-dl85p', 'iflow-main', {
-    follow: true,
-    since: new Date(new Date().getTime() - 60 * 1000),
+async function main() {
+    const api = new KubeApi()
+    const resources_query = new GetNamespaceResources('pod', 'zav-dev')
+    const pods = await resources_query.send(api)
+    console.log(pods)
+}
+
+main().catch((err) => {
+    console.error(err)
+    process.exit(err.code || 1)
 })
-
-logs_query.bind_logger(console)
-api.send(logs_query)

@@ -312,8 +312,10 @@ class RestApiRequest extends RestApiEventEmitter {
      * Called to process the request a-synchronically.
      * Override this method to allow for custom request processing.
      * @param {boolean} throw_errors If true, throws errors.
+     * @param {RestApi} rest_api The rest api to associate with this request.
      */
-    async send() {
+    async send(rest_api = null) {
+        if (rest_api) this.rest_api = rest_api
         try {
             await this.emit_start()
             let data = await this._send_request()
