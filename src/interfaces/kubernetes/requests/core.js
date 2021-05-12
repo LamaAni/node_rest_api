@@ -1,4 +1,4 @@
-const { assert, KubeApiServiceError } = require('../errors')
+const { assert, KubeApiServiceError, KubeApiResourceStatusError } = require('../errors')
 const { RestApiRequest } = require('../../../rest/api')
 const { KubeResourceKind } = require('../resources')
 const { KubeApi } = require('../api')
@@ -43,7 +43,9 @@ class KubeApiRequest extends RestApiRequest {
         } = {},
     ) {
         if (typeof body == 'function') body = body()
-        if (typeof body == 'object') body = JSON.stringify(body)
+        if (body != null && typeof body == 'object') {
+            api_version = api_version || body.apiVersion
+        }
 
         super(resource_path, {
             params,
@@ -57,11 +59,18 @@ class KubeApiRequest extends RestApiRequest {
         })
 
         this.resource_path = resource_path
+        this.api_version = api_version
     }
 
     /** @type {KubeApi} */
     get kube_api() {
         return this.rest_api
+    }
+
+    async get_body_as_string() {
+        if (this.body == null) return null
+        if (typeof this.body == 'string') return this.body
+        return JSON.stringify(this.body)
     }
 
     compose_log_header() {
@@ -128,8 +137,9 @@ class KubeApiNamespaceResourceRequest extends KubeApiRequest {
     parse_data(data) {
         data = super.parse_data(data)
         if (data.kind == 'Status') {
-            if (data.status == 'Failure')
-                throw new KubeApiServiceError(data.message + '\n' + yaml.stringify(data), data)
+            if (data.status == 'Failure') {
+                throw new KubeApiResourceStatusError(data)
+            }
         }
         return data
     }

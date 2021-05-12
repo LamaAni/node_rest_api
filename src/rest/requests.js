@@ -99,7 +99,7 @@ class RestApiRequest extends RestApiEventEmitter {
                 case 'object':
                     v = JSON.stringify(v)
                     break
-                case string:
+                case 'string':
                     break
                 default:
                     assert(false, 'Invalid params object type: ' + type_v)
@@ -166,6 +166,10 @@ class RestApiRequest extends RestApiEventEmitter {
         }
 
         return options
+    }
+
+    async get_body_as_string() {
+        return this.body
     }
 
     /**
@@ -249,7 +253,9 @@ class RestApiRequest extends RestApiEventEmitter {
                     do_reject(err)
                 })
 
-                if (this.body) request.write(this.body)
+                const body_as_string = await this.get_body_as_string()
+
+                if (body_as_string) request.write(body_as_string)
 
                 request.end()
             } catch (err) {
@@ -358,9 +364,9 @@ class RestApiRequest extends RestApiEventEmitter {
             logger.info(compose_line('Request started'))
         })
 
-        this.on(this.error_event_name, (err) => {
-            logger.error(compose_line(err.stack || err.message || err))
-        })
+        // this.on(this.error_event_name, (err) => {
+        //     logger.error(compose_line(err.stack || err.message || err))
+        // })
 
         this.on(this.warning_event_name, (err) => {
             logger.warn(compose_line(err.stack || err.message || err))

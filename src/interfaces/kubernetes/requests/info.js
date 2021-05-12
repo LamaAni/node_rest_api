@@ -38,24 +38,19 @@ class GetResources extends KubeApiNamespaceResourceRequest {
                 field_selector,
                 label_selector,
                 watch,
+                api_version,
             },
         })
     }
 
     parse_data(data) {
-        data = JSON.parse(data)
-        if (data.kind != null) {
-            if (data.kind == 'status') {
-                if (data.status == 'Failure') {
-                    throw new KubeApiServiceError('List namespace resources is invalid.', data)
-                }
-            } else if (data.kind.endsWith('List')) {
-                const item_kind = data.kind.slice(0, -4)
-                for (let item of data.items) {
-                    item.kind = item_kind
-                }
-                return data.items
+        data = super.parse_data(data)
+        if (data.kind != null && data.kind.endsWith('List')) {
+            const item_kind = data.kind.slice(0, -4)
+            for (let item of data.items) {
+                item.kind = item_kind
             }
+            return data.items
         }
         return data
     }

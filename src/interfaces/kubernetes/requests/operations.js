@@ -1,6 +1,7 @@
-const { assert, KubeApiServiceError } = require('../errors')
+const { assert, KubeApiResourceStatusError } = require('../errors')
 const { KubeApiNamespaceResourceRequest } = require('./core')
 const { KubeResourceKind } = require('../resources')
+const { GetResources } = require('./info')
 const yaml = require('yaml')
 
 /**
@@ -8,8 +9,6 @@ const yaml = require('yaml')
  * @typedef {import('../resources').KubeResourceKind} KubeResourceKind
  * @typedef {"APPLY" | "DELETE" | "CREATE"} ConfigureNamespaceResourceCommandType
  */
-
-const FORCE_CREATE_KINDS = ['pod']
 
 class ConfigureResource extends KubeApiNamespaceResourceRequest {
     /**
@@ -25,30 +24,39 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
             'Invalid body type, body must be an object or a yaml that represents an object',
         )
 
+        super((kind = kind || body.kind), null, null, {
+            body,
+            method: 'POST',
+            kube_api,
+        })
+        this.command = command
+        this.resource_updated_event_name = 'resource_updated'
+    }
+
+    async update_body_and_method() {
+        const body = this.body || {}
         body.metadata = body.metadata || {}
         body.metadata.namespace =
-            body.metadata.namespace || kube_api == null
+            body.metadata.namespace || this.kube_api == null
                 ? 'default'
-                : kube_api.config.current_namespace
+                : this.kube_api.config.current_namespace
 
         let method = 'PUT'
-        let name = null
+        let name = body.metadata.name
         let namespace = body.metadata.namespace
-        kind = kind || body.kind
-        switch (command) {
+        switch (this.command) {
             case 'APPLY':
-                // always replace.
-                const kind_name = (kind instanceof KubeResourceKind
-                    ? kind.name
-                    : kind || body.kind
-                ).toLowerCase()
-
-                if (ConfigureResource.FORCE_CREATE_KINDS.some((k) => k.toLowerCase() == kind_name))
+                const cur_info = await this._get_resource_info(name, namespace)
+                if (cur_info == null) {
                     method = 'POST'
-                else method = 'PUT'
+                    name = null
+                } else {
+                    method = 'PUT'
+                }
                 break
             case 'CREATE':
                 method = 'POST'
+                name = null
                 break
             case 'DELETE':
                 method = 'DELETE'
@@ -59,17 +67,11 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
                 assert(false, 'Command must be either APPLY, CREATE or DELETE')
         }
 
-        super(kind, name, namespace, {
-            body,
-            method,
-            kube_api,
+        this.method = method
+
+        this.url = this.resource_path = this.kind.compose_resource_path(namespace, name, {
+            api_version: this.api_version,
         })
-
-        this.resource_updated_event_name = 'resource_updated'
-    }
-
-    static get FORCE_CREATE_KINDS() {
-        return FORCE_CREATE_KINDS
     }
 
     emit_resource_updated(body) {
@@ -92,6 +94,26 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
                     ' updated',
             )
         })
+    }
+
+    async _send_request() {
+        await this.update_body_and_method()
+        return await super._send_request()
+    }
+
+    async _get_resource_info(name, namespace) {
+        const rq = new GetResources(this.kind, {
+            namespace,
+            name,
+            api_version: this.api_version,
+        })
+
+        try {
+            return await rq.send(this.kube_api)
+        } catch (err) {
+            if (!err instanceof KubeApiResourceStatusError || err.status != 'Failure') throw err
+            return null
+        }
     }
 
     /**

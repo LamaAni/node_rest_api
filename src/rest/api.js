@@ -168,6 +168,19 @@ class RestApi extends RestApiEventEmitter {
     }
 
     /**
+     * A-synchronically sends a list of requests to the server.
+     * @param {RestApiRequest|[RestApiRequest]} requests The requests to send.
+     */
+    async send_sync(requests) {
+        const strm = this.stream(requests)
+        const rt = []
+        for await (let val of strm) {
+            rt.push(val)
+        }
+        return rt
+    }
+
+    /**
      * @param {RestApiRequest|[RestApiRequest]} requests The requests to wait for
      * @param {bool} throw_errors If true throw errors.
      */

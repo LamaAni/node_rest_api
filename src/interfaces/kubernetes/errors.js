@@ -4,6 +4,18 @@ class KubeApiError extends RestApiError {}
 
 class KubeApiServiceError extends RestApiError {}
 
+class KubeApiResourceStatusError extends KubeApiError {
+    constructor(api_response) {
+        super(`${api_response.message} (${api_response.code}): ${api_response.reason}`)
+        /** @type {number} */
+        this.code = api_response.code
+        /** @type {string} */
+        this.status = api_response.status
+        /** @type {Object} */
+        this.api_response = api_response
+    }
+}
+
 module.exports = {
     assert:
         /**
@@ -17,4 +29,5 @@ module.exports = {
         },
     KubeApiError,
     KubeApiServiceError,
+    KubeApiResourceStatusError,
 }
