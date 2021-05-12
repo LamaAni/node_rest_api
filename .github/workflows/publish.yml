@@ -36,7 +36,7 @@ jobs:
           git fetch &&
           git checkout master &&
           git pull &&
-          npm version '${{steps.args.outputs.version}}' &&
+          npm version --allow-same-version '${{steps.args.outputs.version}}' &&
           npm publish && 
           git push origin HEAD
         env:
