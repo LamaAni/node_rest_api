@@ -1,10 +1,11 @@
-const { assert, KubeApiServiceError } = require('./errors')
-const { KubeResourceKind } = require('./resources')
-const { KubeApiRequest } = require('./api')
+const { assert, KubeApiServiceError } = require('../errors')
+const { KubeResourceKind } = require('../resources')
+const { KubeApiNamespaceResourceRequest } = require('./core')
 const moment = require('moment')
 
 /**
  * @typedef {Object} GetNamespaceResourcesOptions
+ * @property {string} namespace The namespace of the resource.
  * @property {string} name The resource name.
  * @property {string} api_version override kind api version.
  * @property {boolean} watch Watch for changes.
@@ -12,7 +13,7 @@ const moment = require('moment')
  * @property {string} field_selector The resource field selector.
  */
 
-class GetNamespaceResources extends KubeApiRequest {
+class GetResources extends KubeApiNamespaceResourceRequest {
     /**
      * Returns the list of namespace resources.
      * @param {KubeResourceKind} kind
@@ -21,8 +22,8 @@ class GetNamespaceResources extends KubeApiRequest {
      */
     constructor(
         kind,
-        namespace,
         {
+            namespace = null,
             name = null,
             api_version = null,
             watch = false,
@@ -30,26 +31,15 @@ class GetNamespaceResources extends KubeApiRequest {
             field_selector = null,
         } = {},
     ) {
-        kind = kind instanceof KubeResourceKind ? kind : KubeResourceKind.get_kind(kind)
-
-        super(
-            kind.compose_resource_path(namespace, name, {
-                api_version,
-            }),
-            {
-                method: 'GET',
-                params: {
-                    pretty: false,
-                    field_selector,
-                    label_selector,
-                    watch,
-                },
+        super(kind, name, namespace, {
+            method: 'GET',
+            params: {
+                pretty: false,
+                field_selector,
+                label_selector,
+                watch,
             },
-        )
-
-        this.kind = kind
-        this.namespace = namespace
-        this.name = name
+        })
     }
 
     parse_data(data) {
@@ -77,5 +67,5 @@ class GetNamespaceResources extends KubeApiRequest {
 }
 
 module.exports = {
-    GetNamespaceResources,
+    GetResources,
 }

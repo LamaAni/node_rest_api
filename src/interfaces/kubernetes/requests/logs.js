@@ -1,6 +1,6 @@
-const { assert, KubeApiServiceError } = require('./errors')
-const { KubeResourceKind } = require('./resources')
-const { KubeApiRequest } = require('./api')
+const { assert, KubeApiServiceError } = require('../errors')
+const { KubeResourceKind } = require('../resources')
+const { KubeApiNamespaceResourceRequest } = require('./core')
 const moment = require('moment')
 
 /**
@@ -127,7 +127,7 @@ class KubeApiLogEvent {
  * emitter.
  */
 
-class GetPodLogs extends KubeApiRequest {
+class GetPodLogs extends KubeApiNamespaceResourceRequest {
     /***
      * @param {string} name
      * @param {string} namespace
@@ -164,16 +164,22 @@ class GetPodLogs extends KubeApiRequest {
         )
 
         const kind = KubeResourceKind.get_kind('pod')
-        super(kind.compose_resource_path(namespace, name, { suffix: 'log' }), {
-            method: 'GET',
-            timeout: timeout,
-            params: {
-                follow,
-                container,
-                pretty: false,
-                timestamps: true,
+        super(
+            kind,
+            name,
+            namespace,
+            {
+                method: 'GET',
+                timeout: timeout,
+                params: {
+                    follow,
+                    container,
+                    pretty: false,
+                    timestamps: true,
+                },
             },
-        })
+            'log',
+        )
 
         this.kind = kind
         this.name = name
@@ -183,7 +189,7 @@ class GetPodLogs extends KubeApiRequest {
         this.collect_log_lines = collect_log_lines
         this.parse_log_events = parse_log_events
         this.show_timestamps = show_timestamps
-        this.emit_log_lines_on_events = false
+        this.emit_log_lines_on_events = emit_log_lines_on_events
 
         this.on(this.start_event_name, () => this.prepare_log_read())
 
@@ -321,7 +327,7 @@ class GetPodLogs extends KubeApiRequest {
             if (emit) this.emit_log_lines(lines)
             if (this.collect_log_lines) data.lines = data.lines.concat(lines)
         }
-        
+
         return data
     }
 

@@ -1,20 +1,20 @@
 const { assert } = require('./errors')
 
 /**
- * @typedef { "Pending" | "Active" | "Succeeded" | "Failed" | "Running" | "Deleted" } ResourceKindState
+ * @typedef { "Pending" | "Active" | "Succeeded" | "Failed" | "Running" | "Deleted" } KubeResourceState
  */
 
 /**
  * @typedef {Object} KubeResourceKindOptions
  * @property {string} api_version The api version of the kind. Defaults to v1.
- * @property {(body:{}, was_deleted:boolean)=>ResourceKindState|string} parse_kind_state Parse the state of the resource.
+ * @property {(body:{}, was_deleted:boolean)=>KubeResourceState|string} parse_kind_state Parse the state of the resource.
  * @property {boolean} auto_include_in_watch If true, and watching resource changes, will
  * be auto included.
  */
 
 /**
  * @param {{}} body The resource body
- * @returns {ResourceKindState}
+ * @returns {KubeResourceState}
  */
 function parse_kind_state_default(body, was_deleted = false) {
     return 'Active'
@@ -24,7 +24,6 @@ const RESOURCE_KINDS = {}
 
 class KubeResourceKind {
     /**
-     *
      * @param {string} name The name of the resource (Pod, Deployment)
      * @param {KubeResourceKindOptions} param2
      */
@@ -68,7 +67,7 @@ class KubeResourceKind {
      * Parses the state of the kind given the object body.
      * @param {Object} body The body of the object as returned from the api.
      * @param {boolean} was_deleted
-     * @returns {ResourceKindState}
+     * @returns {KubeResourceState}
      */
     parse_state(body, was_deleted = false) {
         if (was_deleted) return 'Deleted'
@@ -93,7 +92,7 @@ class KubeResourceKind {
             '',
             version_header,
             api_version,
-            'namespaces',
+            namespace == null ? null : 'namespaces',
             namespace,
             this.plural,
             name,
@@ -169,14 +168,14 @@ class KubeResourceKind {
 
     /***
      * @param {{}} yaml The resource yaml
-     * @returns {ResourceKindState}
+     * @returns {KubeResourceState}
      */
     static parse_job_state(yaml) {
         const status = yaml['status'] || {}
         /** @type {[{}]} */
         const conditions = status['conditions'] || []
 
-        /** @type {ResourceKindState} */
+        /** @type {KubeResourceState} */
         let job_status = 'Pending'
 
         // TODO: check why we go through all conditions.
@@ -193,7 +192,7 @@ class KubeResourceKind {
 
     /***
      * @param {{}} yaml The resource yaml
-     * @returns {ResourceKindState}
+     * @returns {KubeResourceState}
      */
     static parse_pod_state(yaml) {
         const status = yaml['status'] || {}
@@ -228,6 +227,7 @@ class KubeResourceKind {
      * @param {KubeResourceKind} other
      */
     equals(other) {
+        if (typeof other == 'string') return other.toLowerCase() == this.name.toLowerCase()
         return other.api_version == this.api_version && other.name == this.name
     }
 
@@ -250,9 +250,7 @@ for (let kind of [
 }
 
 module.exports = {
-    /** @type {ResourceKindState} Interface */
-    ResourceKindState: null,
-    KubeResourceKind: KubeResourceKind,
+    KubeResourceKind,
 }
 
 if (require.main == module) {

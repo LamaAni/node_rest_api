@@ -1,11 +1,6 @@
-const fs = require('fs')
-const path = require('path')
-const os = require('os')
-const yaml = require('yaml')
-const { KubeConfig, CoreV1Api } = require('@kubernetes/client-node')
-
+const { KubeConfig } = require('@kubernetes/client-node')
 const { assert } = require('./errors')
-const { RestApi, RestApiRequest } = require('../../rest/api')
+const { RestApi } = require('../../rest/api')
 
 class KubeApiConfig {
     constructor({ config_file = null, load_defaults = true } = {}) {
@@ -18,72 +13,14 @@ class KubeApiConfig {
         return this.config.getCurrentCluster().server
     }
 
+    get current_namespace() {
+        return (
+            (this.config.getContextObject(this.config.currentContext) || {}).namespace || 'default'
+        )
+    }
+
     async apply_to_request_options(options) {
         await this.config.applyToRequest(options)
-    }
-}
-
-/**
- * @typedef {import('../../rest/requests').RestApiRequestOptions} RestApiRequestOptions
- * @typedef {RestApiRequestOptions} KubeApiRequestOptions
- */
-
-class KubeApiRequest extends RestApiRequest {
-    /**
-     * @param {string} resource_path 
-     * @param {KubeApiRequestOptions} param1 
-     */
-    constructor(
-        resource_path,
-        {
-            params = null,
-            headers = null,
-            method = REST_API_REQUEST_METHODS.GET,
-            timeout = null,
-            body = null,
-            ignore_errors = null,
-            max_concurrent_request_failures = null,
-        } = {},
-    ) {
-        super(resource_path, {
-            params,
-            headers,
-            method,
-            timeout,
-            body,
-            ignore_errors,
-            max_concurrent_request_failures,
-        })
-
-        this.resource_path = resource_path
-
-        /**
-         * @type {KubeApi}
-         */
-        this.rest_api = this.rest_api
-    }
-
-    compose_log_header() {
-        return `[${this.resource_path}] `
-    }
-
-    /**
-     * Composes the request options for this api.
-     */
-    async compose_request_options() {
-        let url = this.url
-        if (
-            this.rest_api instanceof KubeApi &&
-            typeof url == 'string' &&
-            !/^https?:\/{2}/.test(url.trim())
-        ) {
-            url = url.trim()
-            url = this.rest_api.config.server_base_url + (url.startsWith('/') ? '' : '/') + url
-        }
-        const options = await super.compose_request_options(url)
-        if (this.rest_api instanceof KubeApi)
-            await this.rest_api.config.apply_to_request_options(options)
-        return options
     }
 }
 
@@ -112,5 +49,4 @@ class KubeApi extends RestApi {
 
 module.exports = {
     KubeApi,
-    KubeApiRequest,
 }
