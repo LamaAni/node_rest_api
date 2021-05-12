@@ -1,5 +1,8 @@
 module.exports = {
     ...require('./api'),
-    ...require('./queries'),
     ...require('./resources'),
+    ...require('./requests/core'),
+    ...require('./requests/info'),
+    ...require('./requests/logs'),
+    ...require('./requests/operations'),
 }
