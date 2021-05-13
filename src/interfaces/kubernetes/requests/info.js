@@ -17,8 +17,7 @@ class GetResources extends KubeApiNamespaceResourceRequest {
     /**
      * Returns the list of namespace resources.
      * @param {KubeResourceKind} kind
-     * @param {string} namespace
-     * @param {GetNamespaceResourcesOptions} param2
+     * @param {GetNamespaceResourcesOptions} param1
      */
     constructor(
         kind,
@@ -35,8 +34,8 @@ class GetResources extends KubeApiNamespaceResourceRequest {
             method: 'GET',
             params: {
                 pretty: false,
-                field_selector,
-                label_selector,
+                fieldSelector: field_selector,
+                labelSelector: label_selector,
                 watch,
                 api_version,
             },

@@ -7,12 +7,12 @@ const yaml = require('yaml')
 /**
  * @typedef {import('../api').KubeApi} KubeApi
  * @typedef {import('../resources').KubeResourceKind} KubeResourceKind
- * @typedef {"APPLY" | "DELETE" | "CREATE"} ConfigureNamespaceResourceCommandType
+ * @typedef {"APPLY" | "DELETE" | "CREATE"} ConfigureResourceCommandType
  */
 
 class ConfigureResource extends KubeApiNamespaceResourceRequest {
     /**
-     * @param {ConfigureNamespaceResourceCommandType} command
+     * @param {ConfigureResourceCommandType} command
      * @param {string|Object|()=>string|Object} body
      * @param {KubeApi} kube_api
      * @param {string|KubeResourceKind} kind
@@ -117,7 +117,7 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
     }
 
     /**
-     * @param {ConfigureNamespaceResourceCommandType} command
+     * @param {ConfigureResourceCommandType} command
      * @param {string} as_yaml
      * @param {KubeApi} api
      * @param {yaml.Options} options
@@ -157,6 +157,6 @@ class DeleteResourceByName extends ConfigureResource {
 }
 
 module.exports = {
-    ConfigureNamespaceResource: ConfigureResource,
-    DeleteNamespaceResourceByName: DeleteResourceByName,
+    ConfigureResource,
+    DeleteResourceByName,
 }

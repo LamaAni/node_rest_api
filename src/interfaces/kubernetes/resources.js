@@ -245,6 +245,8 @@ for (let kind of [
         parse_kind_state: KubeResourceKind.parse_job_state,
     }),
     new KubeResourceKind('Deployment', { api_version: 'apps/v1' }),
+    new KubeResourceKind('Namespace'),
+    new KubeResourceKind('Secret'),
 ]) {
     KubeResourceKind.register_global_kind(kind)
 }

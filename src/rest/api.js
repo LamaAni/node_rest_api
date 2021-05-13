@@ -113,10 +113,12 @@ class RestApi extends RestApiEventEmitter {
     }
 
     /**
-     * A-synchronically sends a list of requests to the server.
+     * Invokes the requests (by adding them to the pending list), and
+     * dose not wait for response.
      * @param {RestApiRequest|[RestApiRequest]} requests The requests to send.
+     * @returns {RestApiEventEmitter} the associated event handler.
      */
-    send(requests) {
+    invoke(requests) {
         requests = this._validate_requests(requests)
         const handler = new RestApiEventEmitter()
 
@@ -138,6 +140,8 @@ class RestApi extends RestApiEventEmitter {
         )
 
         this.start_sending_pending_requests()
+
+        return handler
     }
 
     /**
@@ -162,7 +166,7 @@ class RestApi extends RestApiEventEmitter {
             })
         })
 
-        this.send(requests)
+        this.invoke(requests)
 
         return stream
     }
@@ -171,7 +175,7 @@ class RestApi extends RestApiEventEmitter {
      * A-synchronically sends a list of requests to the server.
      * @param {RestApiRequest|[RestApiRequest]} requests The requests to send.
      */
-    async send_sync(requests) {
+    async send(requests) {
         const strm = this.stream(requests)
         const rt = []
         for await (let val of strm) {
