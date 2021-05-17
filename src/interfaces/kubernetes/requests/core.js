@@ -120,7 +120,9 @@ class KubeApiNamespaceResourceRequest extends KubeApiRequest {
         )
         if (typeof kind == 'string') kind = kind.trim()
         const resource_kind =
-            kind instanceof KubeResourceKind ? kind : KubeResourceKind.get_kind(kind)
+            kind instanceof KubeResourceKind
+                ? kind
+                : KubeResourceKind.get_or_create_kind(kind, options.api_version || 'v1')
 
         const resource_path = resource_kind.compose_resource_path(namespace, name, {
             api_version: options.api_version,

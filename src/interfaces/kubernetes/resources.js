@@ -123,6 +123,22 @@ class KubeResourceKind {
         return this.global_kinds[name]
     }
 
+    /**
+     * @param {string} name
+     * @param {string} api_version
+     * @returns {KubeResourceKind}
+     */
+    static get_or_create_kind(name, api_version = 'v1') {
+        assert(typeof name == 'string' && name.trim().length > 0, 'Name cannot be null')
+        if (this.has_kind(name)) return this.get_kind(name)
+        assert(
+            typeof api_version == 'string' && name.trim().length > 0,
+            'If kubernetes kind was not found by name, then api_version must be a non empty string',
+        )
+
+        return new KubeResourceKind(name, { api_version, auto_include_in_watch: false })
+    }
+
     static all() {
         return Object.values(KubeResourceKind.global_kinds).filter(
             (k) => k instanceof KubeResourceKind,
