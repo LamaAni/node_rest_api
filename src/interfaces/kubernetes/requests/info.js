@@ -58,6 +58,30 @@ class GetResources extends KubeApiNamespaceResourceRequest {
         if (Array.isArray(data)) data.forEach((item) => super.emit_data(item))
         else super.emit_data(data)
     }
+
+    /**
+     * @param {string} as_yaml
+     * @param {KubeApi} api
+     * @param {yaml.Options} options
+     * @param {(r:Object)=>{}} prepare_resource
+     * @returns {[GetResources]}
+     */
+    static from_yaml(as_yaml, api = null, prepare_resource = null, options = {}) {
+        assert(
+            typeof as_yaml == 'string' && as_yaml.trim().length > 0,
+            'as_yaml must be a non empty string',
+        )
+        const resources = yaml.parseAllDocuments(as_yaml, options).map((d) => d.toJSON())
+        if (prepare_resource) resources.forEach((r) => prepare_resource(r))
+        return resources.map(
+            (r) =>
+                new GetResources(r.kind, {
+                    name: (r.metadata || {}).name,
+                    namespace: (r.metadata || {}).namespace,
+                    api_version: r.apiVersion,
+                }),
+        )
+    }
 }
 
 module.exports = {

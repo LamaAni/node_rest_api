@@ -3,6 +3,7 @@ const { KubeApiNamespaceResourceRequest } = require('./core')
 const { KubeResourceKind } = require('../resources')
 const { GetResources } = require('./info')
 const yaml = require('yaml')
+const extend = require('extend')
 
 /**
  * @typedef {import('../api').KubeApi} KubeApi
@@ -28,29 +29,31 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
             body,
             method: 'POST',
             kube_api,
+            api_version: body.apiVersion,
         })
         this.command = command
         this.resource_updated_event_name = 'resource_updated'
     }
 
     async update_body_and_method() {
-        const body = this.body || {}
+        let body = this.body || {}
         body.metadata = body.metadata || {}
         body.metadata.namespace =
-            body.metadata.namespace || this.kube_api == null
-                ? 'default'
-                : this.kube_api.config.current_namespace
+            body.metadata.namespace ||
+            (this.kube_api == null ? 'default' : this.kube_api.config.current_namespace)
 
         let method = 'PUT'
         let name = body.metadata.name
         let namespace = body.metadata.namespace
         switch (this.command) {
             case 'APPLY':
-                const cur_info = await this._get_resource_info(name, namespace)
-                if (cur_info == null) {
+                const resource_info = await this._get_resource_info(name, namespace)
+                if (resource_info == null) {
                     method = 'POST'
                     name = null
                 } else {
+                    // patching with old existing
+                    body = extend(true, resource_info, body)
                     method = 'PUT'
                 }
                 break
@@ -60,14 +63,13 @@ class ConfigureResource extends KubeApiNamespaceResourceRequest {
                 break
             case 'DELETE':
                 method = 'DELETE'
-                name = body.name
-                body = null
                 break
             default:
                 assert(false, 'Command must be either APPLY, CREATE or DELETE')
         }
 
         this.method = method
+        this.body = body
 
         this.url = this.resource_path = this.kind.compose_resource_path(namespace, name, {
             api_version: this.api_version,
