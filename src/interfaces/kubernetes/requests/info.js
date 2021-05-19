@@ -37,8 +37,8 @@ class GetResources extends KubeApiNamespaceResourceRequest {
                 fieldSelector: field_selector,
                 labelSelector: label_selector,
                 watch,
-                api_version,
             },
+            api_version,
         })
     }
 

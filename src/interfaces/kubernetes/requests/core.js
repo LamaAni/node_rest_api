@@ -122,7 +122,7 @@ class KubeApiNamespaceResourceRequest extends KubeApiRequest {
         const resource_kind =
             kind instanceof KubeResourceKind
                 ? kind
-                : KubeResourceKind.get_or_create_kind(kind, options.api_version || 'v1')
+                : KubeResourceKind.get_or_create_kind(kind, options.api_version)
 
         const resource_path = resource_kind.compose_resource_path(namespace, name, {
             api_version: options.api_version,
